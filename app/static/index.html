@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Workflow Management System</title>
+<style>
+body{font:16px/1.5 system-ui,sans-serif;max-width:900px;margin:0 auto;padding:1rem;background:#f6f5f1;color:#1b1b19}
+.card{background:#fff;border:1px solid #ddd;padding:1rem;margin-bottom:1rem}input,select,button,textarea{font:inherit;padding:.4rem}
+button{background:#1f4e4a;color:#fff;border:0;cursor:pointer;margin:.1rem}button.alt{background:#777}
+table{border-collapse:collapse;width:100%;font-size:.9rem}td,th{border-bottom:1px solid #eee;padding:.3rem;text-align:left}
+</style></head><body>
+<h1>Workflow Management System</h1>
+<div class="card" id="login"><b>Log in</b><br><input id="email" placeholder="email" value="eli@example.com">
+<input id="pw" type="password" placeholder="password" value="demo123"><button onclick="doLogin()">Log in</button> <span id="err"></span>
+<p style="font-size:.85rem">Demo accounts come from <code>python -m app.seed</code>.</p></div>
+<div id="app" hidden>
+<p>Signed in as <b id="who"></b> <button class="alt" onclick="location.reload()">Log out</button></p>
+<div class="card"><h2>Tasks</h2><table id="tasks"></table></div>
+<div class="card"><h2>Requests</h2>
+<select id="kind"><option>leave</option><option>expense</option><option>purchase</option></select>
+<input id="desc" placeholder="What for?"><input id="amt" type="number" min="0" step="0.01" placeholder="Amount"><button onclick="submitReq()">Submit</button>
+<table id="reqs"></table></div>
+<div class="card"><h2>Notifications</h2><div id="notes"></div></div></div>
+<script>
+let H={},ME=null;const $=s=>document.querySelector(s);
+async function api(p,o={}){const r=await fetch(p,{...o,headers:{'Content-Type':'application/json',...H,...(o.headers||{})}});const j=r.status==204?null:await r.json();if(!r.ok)throw new Error(j.detail||'Request failed');return j}
+async function doLogin(){try{const j=await api('/api/auth/login',{method:'POST',body:JSON.stringify({email:$('#email').value,password:$('#pw').value})});H={Authorization:'Bearer '+j.token};ME=j.user;$('#login').hidden=true;$('#app').hidden=false;$('#who').textContent=ME.name+' ('+ME.role+')';load()}catch(e){$('#err').textContent=e.message}}
+async function load(){
+ const t=await api('/api/tasks');$('#tasks').innerHTML='<tr><th>Task<th>Status<th></tr>'+t.map(x=>`<tr><td>${x.title}<td>${x.status}<td>${x.status==='todo'?`<button onclick="mv(${x.id},'in_progress')">Start</button>`:x.status==='in_progress'?`<button onclick="mv(${x.id},'done')">Done</button>`:''}</tr>`).join('');
+ const r=await api('/api/requests');$('#reqs').innerHTML='<tr><th>Type<th>Description<th>Amount<th>Status<th></tr>'+r.map(x=>`<tr><td>${x.kind}<td>${x.description}<td>${x.amount}<td>${x.status}<td>${x.status==='pending'&&ME.role!=='Employee'&&x.requester_id!==ME.id?`<button onclick="dec(${x.id},true)">Approve</button><button class="alt" onclick="dec(${x.id},false)">Reject</button>`:''}</tr>`).join('');
+ const n=await api('/api/notifications');$('#notes').innerHTML=n.map(x=>`<div>${x.message}</div>`).join('')||'Nothing yet.'}
+async function mv(id,s){try{await api(`/api/tasks/${id}/status`,{method:'PATCH',body:JSON.stringify({status:s})});load()}catch(e){alert(e.message)}}
+async function dec(id,a){try{await api(`/api/requests/${id}/decision`,{method:'POST',body:JSON.stringify({approve:a})});load()}catch(e){alert(e.message)}}
+async function submitReq(){try{await api('/api/requests',{method:'POST',body:JSON.stringify({kind:$('#kind').value,description:$('#desc').value,amount:parseFloat($('#amt').value||0)})});load()}catch(e){alert(e.message)}}
+</script></body></html>
